@@ -1,2 +1,12 @@
-# home-energy
-Logging, analysing and optimising a home energy system: solar, battery, heat pump and room temperatures recorded to PostgreSQL via MQTT and Node-RED, used to measure heat pump efficiency, model heat loss, detect faults and schedule loads against Agile electricity prices.
+# Home energy
+
+Logging, analysing and optimising a home energy system: solar, battery,
+heat pump, EV and room temperatures.
+
+See the [project proposal](docs/project_proposal.md) for aims, hardware,
+stages and how progress is measured.
+
+## Status
+
+- [ ] Stage 1: Grid meter and Venus OS Large
+- [ ] Stage 2: Home server foundations
