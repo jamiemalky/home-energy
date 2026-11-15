@@ -8,5 +8,5 @@ stages and how progress is measured.
 
 ## Status
 
-- [ ] Stage 1: Grid meter and Venus OS Large
+- [x] Stage 1: Grid meter and Venus OS Large
 - [ ] Stage 2: Home server foundations
