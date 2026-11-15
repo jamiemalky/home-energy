@@ -1,0 +1,4 @@
+#!/bin/sh
+exec 2>&1
+exec /data/bin/socat pty,link=/dev/ttyEM112,raw,echo=0 \
+    tcp:192.168.8.150:502,nodelay,keepalive,keepidle=10,keepintvl=3,keepcnt=3
