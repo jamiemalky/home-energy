@@ -8,7 +8,8 @@ grid meter setup works.
 
 | Date | Firmware | Notes |
 | --- | --- | --- |
-| 2026-11-15 | v3.75 (standard), build 20260624163305 | Before firmware upgrade to VenusOS large. Grid meter services working. |
+| 2026-11-15 | v3.75 (standard), build 20260624163305 | Before upgrade. Grid meter services working. |
+| 2026-11-15 | v3.85 (Large), build 20261022164917 | Upgraded to Large. Grid meter services came back up unaided using /data/bin/socat. Root password had to be set again after switching image type. |
 
 **Rollback:** Remote Console → Settings → Firmware → Online updates →
 Image type: Normal, then reinstall v3.75. Or use Settings → Firmware →
