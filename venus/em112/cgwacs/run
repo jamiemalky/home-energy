@@ -1,0 +1,4 @@
+#!/bin/sh
+exec 2>&1
+sleep 3
+exec /opt/victronenergy/dbus-cgwacs/dbus-cgwacs --timeout 1000 /dev/ttyEM112
