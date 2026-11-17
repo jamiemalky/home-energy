@@ -1,6 +1,6 @@
 # Home Energy Data Project — Proposal
 
-Last updated 15 November 2026
+Last updated Nov 15, 2026
 
 ## Summary
 
@@ -8,9 +8,10 @@ This project logs a home's solar, battery, heat pump and room-temperature data i
 
 ## Goals
 
-**Home improvement**
+**What the house gets**
 
 - Lower running costs, by moving battery, EV, heating and hot water use into cheap and solar-rich periods.
+- The right Octopus tariff for each season, chosen from modelled costs on the house's own half-hourly data rather than estimates.
 - Extra income from grid-support events through the Axle VPP, without compromising the house's own needs.
 - Better heat pump efficiency, by tuning the heating curve and hot water settings from measured COP rather than guesswork.
 - Earlier fault detection: failed defrosts, communication faults, falling system pressure or a cylinder not reaching temperature, spotted before they mean a cold house or a cold shower.
@@ -26,34 +27,9 @@ This project logs a home's solar, battery, heat pump and room-temperature data i
 
 ## System context
 
-The project builds on equipment already installed: a Victron EasySolar inverter-charger with a GX device, 20 kWh of LiFePO4 batteries and 9 kW of solar; an EM112 grid meter; a Vaillant aroTHERM air-source heat pump with a sensoCOMFORT controller; underfloor heating and radiators with Heatmiser neo room thermostats; and Octopus Agile import and export tariffs.
+The project builds on equipment already installed: a Victron EasySolar inverter-charger with a GX device, 20 kWh of LiFePO4 batteries and 9 kW of solar; an EM112 grid meter; a Vaillant aroTHERM air-source heat pump with a sensoCOMFORT controller; underfloor heating and radiators with Heatmiser neo room thermostats; and Octopus time-of-use import and export tariffs, chosen by season (Cosy import for winter 2026–27).
 
-```mermaid
-flowchart LR
-    subgraph Sources
-        V[Victron GX<br/>solar, battery, grid]
-        E[eBUS adapter<br/>heat pump]
-        N[Heatmiser neoHub<br/>room temperatures]
-        A[Online APIs<br/>prices, weather, forecasts, Axle]
-    end
-    subgraph Server[Home server - Proxmox]
-        M[Mosquitto<br/>MQTT broker] --> R[Node-RED<br/>collect, store, control]
-        R --> P[(PostgreSQL)]
-        P --> G[Python and Grafana<br/>analysis and optimiser]
-    end
-    subgraph Outputs
-        D[Grafana dashboards]
-        H[Smart display<br/>switches and alerts]
-        B[Nightly backups]
-    end
-    V <--> M
-    E --> M
-    N --> R
-    A --> R
-    G --> D
-    R <--> H
-    P --> B
-```
+&#91;embedded content: system architecture · 4 sources, the home server, 4 outputs\]
 
 The Victron and smart-display links run both ways, because later stages send control commands back out; everything else is read-only.
 
@@ -90,7 +66,7 @@ Everything is free and open source. Proxmox keeps each service separate, so any 
 | ebusd | Data stack | Reads the heat pump through the eBUS adapter and publishes to MQTT; read-only at first |
 | Venus OS MQTT | Victron GX | Publishes inverter, battery, solar and grid data; needs a keepalive about once a minute |
 | neoHub local API (neohubapi library) | Data stack | Polls room temperatures and setpoints every 1–5 minutes |
-| Octopus Agile API | Internet | Half-hourly import and export prices, published around 4pm for the next day |
+| Octopus Agile API | Internet | Half-hourly Agile prices, published around 4pm for the next day, and historical rates for every tariff |
 | Axle Energy API | Internet | Grid-support event notifications and results for the VPP |
 | Open-Meteo, Forecast.Solar or Solcast | Internet | Weather and solar forecasts |
 | Python: pandas, psycopg, pvlib, PuLP or scipy, pytest | Data stack or laptop | Analysis, forecasting, the optimiser and its tests |
@@ -98,7 +74,7 @@ Everything is free and open source. Proxmox keeps each service separate, so any 
 | node-red-contrib-google-smarthome, with a Cloudflare or Tailscale tunnel | Data stack | Exposes virtual switches such as Charge EV now to the smart display, without opening router ports |
 | Home Assistant OS (optional) | Proxmox VM | Future integrations, sharing the same MQTT broker |
 | Git and GitHub | Everywhere | This repository: flows, schema, analysis code and dashboard definitions |
-| pg_dump and restic | Data stack | Nightly backups to the external drive and an off-site cloud bucket |
+| pg\_dump and restic | Data stack | Nightly backups to the external drive and an off-site cloud bucket |
 
 ## Measurables
 
@@ -113,6 +89,7 @@ Success is judged on data quality first, then on what the data reveals, and last
 | Heat pump | Daily COP and a seasonal SCOP estimate, against outdoor and flow temperature | First month's figures published |
 | Hot water | Daily hot water energy | 3–4 kWh a day once settings are tuned |
 | Energy sourcing | Share of heat pump electricity from solar, battery and grid | Calculated monthly |
+| Tariff choice | Modelled annual cost of each allowed Octopus import and export pairing, on the house's own data | Recommendation reviewed each season |
 | House model | Heat-loss coefficient in W/K, with an uncertainty range | Compared with the design heat-loss calculation |
 | Forecasting | Solar and load forecast error, as mean absolute error in kWh per day | Each forecast source compared on the same days |
 | VPP | Events joined, energy delivered and income earned; every event ends with the system back in its normal state | All events handled safely; income reported monthly |
@@ -120,64 +97,70 @@ Success is judged on data quality first, then on what the data reveals, and last
 
 ## Stages
 
-Ten stages, each ending in something that works and is committed to Git. Stage 1 is partly done already. Stages 4 and 5 depend on hardware, so they can swap order or run alongside stage 6.
+Eleven stages, each ending in something that works and is committed to Git. Stage 1 is partly done already. Stages 5 and 6 depend on hardware, so they can swap order or run alongside stage 7.
 
 ### 1. Grid meter and Venus OS Large
 
 - **Goal:** an accurate grid meter feeding the Victron ESS, and the GX running Venus OS Large without losing it.
 - **Already done:** a Carlo Gavazzi EM112 meter read over Wi-Fi through a Waveshare RS485 bridge, presented to Venus OS as a local serial port and driven by Victron's own meter driver. It runs as persistent services that survive reboots. The appendix documents how.
 - **Requires for the upgrade:** copy `/data/em112/` and `/data/rc.local` off the GX and note the current firmware version for rollback. Check where `socat` lives; if it is under `/usr/bin`, copy it to `/data/bin/` and point the run script there, because firmware updates replace `/usr`. Then install Venus OS Large.
-- **Done when:** after the upgrade and a reboot, both meter services are up, the EM112 shows as the grid meter, ESS and Victron Dynamic ESS behave as before, Node-RED is reachable on the GX, and MQTT can be switched on for stage 3.
+- **Done when:** after the upgrade and a reboot, both meter services are up, the EM112 shows as the grid meter, ESS and Victron Dynamic ESS behave as before, Node-RED is reachable on the GX, and MQTT can be switched on for stage 4.
 
-### 2. Home server foundations
+### 2. Feasibility backtest and tariff comparison on existing data (solar and battery only)
+
+- **Goal:** early, evidence-based answers to two questions, using data that already exists and before any new hardware arrives: could a custom battery schedule beat Victron Dynamic ESS, and which Octopus import and export tariffs suit the house best, season by season?
+- **Requires:** historical solar, consumption, grid and battery data exported from VRM (CSV download or the VRM API), and historical unit rates and standing charges for the candidate tariffs from Octopus's public API for the local region: Agile, Cosy, Go, Flux and Tracker on import, and Agile Outgoing and fixed export on the export side. A Python model of the battery (usable capacity, charge and discharge power limits, round-trip efficiency, the 15% state-of-charge floor and the export limit), solved as the same half-hourly linear programme planned for stage 11, using PuLP, and re-run under each tariff, because the best battery schedule changes with the tariff. Heat pump, EV and hot water use are treated as fixed demand, because they can't be shifted in hindsight. Only import and export pairings that Octopus actually allows are compared.
+- **Done when:** a notebook and a short write-up in `docs/` report, over at least a month of data: actual cost; optimised cost on the current tariff and the gap between them; and the annualised cost of each allowed tariff pairing, standing charges included. The write-up states plainly that optimised figures assume perfect foresight and are therefore an upper bound, recommends a tariff for winter and for summer, and concludes whether the stage 11 optimiser is worth building. The comparison is re-run as each new season of data arrives.
+
+### 3. Home server foundations
 
 - **Goal:** a home server that is secure, updated and backed up from day one.
 - **Requires:** Proxmox on the mini PC, a Debian VM or container for the data stack, SSH keys, then Mosquitto, Node-RED and PostgreSQL. Secrets kept outside Git. Nightly backups to the external drive and the cloud.
 - **Done when:** the server survives a pulled-plug reboot and comes back with every service running, and a test restore from backup works.
 
-### 3. Victron data pipeline
+### 4. Victron data pipeline
 
 - **Goal:** the first real data flowing into the database.
 - **Requires:** MQTT switched on in the GX, a Node-RED keepalive, the first schema (a readings table with timestamp, source, metric and value), and batched inserts every 10–60 seconds.
 - **Done when:** a week of solar, battery, load and grid data sits in PostgreSQL with no gaps beyond power cuts.
 
-### 4. Heat pump data
+### 5. Heat pump data
 
 - **Goal:** heat pump temperatures, power, energy counters, status codes and defrost events logged alongside the Victron data.
 - **Requires:** the eBUS adapter wired in parallel at the controller with the system isolated, joined to Wi-Fi, ebusd in read-only mode with the right Vaillant message definitions.
 - **Done when:** flow, return and outdoor temperature, flow rate, compressor state, status codes and energy figures appear every minute.
 
-### 5. Room data
+### 6. Room data
 
 - **Goal:** temperature and setpoint for every room.
 - **Requires:** API access switched on in the Neo app to get a token, and a poller every 1–5 minutes.
 - **Done when:** all rooms log continuously and match the thermostats' own displays.
 
-### 6. Prices, weather and forecasts
+### 7. Prices, weather and forecasts
 
 - **Goal:** the context for every reading: what electricity cost, and what was forecast.
 - **Requires:** the Agile import and export price fetch, Open-Meteo weather, and at least one solar forecast source, each stored with the time it was issued so forecasts can be scored later.
 - **Done when:** prices and forecasts are stored daily and forecast-against-actual can be queried.
 
-### 7. Analysis and dashboards
+### 8. Analysis and dashboards
 
 - **Goal:** the first findings, written up.
 - **Requires:** SQL views for daily energy; Python analysis of COP, energy sourcing, heat loss and defrost behaviour; Grafana dashboards exported to this repository.
 - **Done when:** a short write-up reports COP against outdoor temperature, the heat-loss coefficient, where the heat pump's electricity comes from, and how often it defrosts.
 
-### 8. Household interface and alerts
+### 9. Household interface and alerts
 
 - **Goal:** useful controls and warnings without opening an app.
 - **Requires:** Heatmiser linked to Google Home; virtual switches such as Charge EV now and Boost hot water; spoken announcements and phone alerts from Node-RED for faults, low system pressure and cheap-price periods. Load shedding on the grid-meter reading is built here, before any automatic control.
 - **Done when:** a switch on the smart display sets an override that expires on its own and respects every safety limit, and a simulated fault raises an alert.
 
-### 9. Axle VPP participation
+### 10. Axle VPP participation
 
 - **Goal:** the battery taking part in Axle Energy grid-support events automatically and safely.
 - **Requires:** a Node-RED flow on the GX that receives events from the Axle API, pauses Victron Dynamic ESS for the event window, sets the ESS grid setpoint to export at the agreed power, and restores normal operation afterwards. Safety features come first: a state-of-charge floor, an absolute end-time timer independent of the event logic, and a restore-to-safe-state on Node-RED startup. Every event is logged to the database.
 - **Done when:** a test event and then several real events run end to end, the system returns to its normal state every time, and delivered energy and income are reported.
 
-### 10. Forecasting and optimiser
+### 11. Forecasting and optimiser
 
 - **Goal:** a scheduler for the battery, EV, heating and hot water that beats Victron Dynamic ESS.
 - **Requires:** a load model trained on the logged data, solar and weather forecasts, and a linear programme over 48 half-hour slots, solved with PuLP or scipy and re-run every half hour. It runs in shadow mode first and is backtested against Victron Dynamic ESS. VPP event windows are treated as fixed commitments.
