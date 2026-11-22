@@ -47,6 +47,17 @@ Changed from the defaults (press F10 at power-on to reach the BIOS):
 | After Power Loss | Power On | Server restarts by itself after a power cut |
 | Secure Boot | Disabled | Simplest route for the Proxmox installer |
 
+## Data container
+
+| Item | Detail |
+| --- | --- |
+| Container | 101 (`data`), Debian, unprivileged, start at boot |
+| IP address | `192.168.8.21/24` |
+| Resources | 2 cores, 4 GB RAM, 64 GB disk |
+| Services | Mosquitto (MQTT broker), PostgreSQL (database `energy`, user `energy`), Node-RED (`http://192.168.8.21:1880`) |
+| Victron link | Node-RED connects to the GX MQTT broker on port 8883 with TLS (GX security profile: Secured) |
+| Database link | Node-RED connects to PostgreSQL on 127.0.0.1:5432 without SSL (same container) |
+
 ## Checks
 
 | Date | Test | Result |
