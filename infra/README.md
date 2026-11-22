@@ -58,6 +58,24 @@ Changed from the defaults (press F10 at power-on to reach the BIOS):
 | Victron link | Node-RED connects to the GX MQTT broker on port 8883 with TLS (GX security profile: Secured) |
 | Database link | Node-RED connects to PostgreSQL on 127.0.0.1:5432 without SSL (same container) |
 
+## ebusd (heat pump data)
+ 
+| Item | Detail |
+| --- | --- |
+| Adapter | eBUS Adapter Stick C6 at `192.168.8.131`, Wi-Fi, wired in parallel at the sensoCOMFORT backplate |
+| Software | ebusd 26.1, installed in the data container from the GitHub release `.deb` (does not update automatically) |
+| Definitions | Local copy of the ebusd configuration in `/opt/ebusd-config` (cloned from github.com/eBUS/ebus.github.io) |
+| Outdoor unit | Reports as `HMUX0`, which has no official definition file. `08.hmu.csv` was copied to `08.hmux0.csv`; most values decode, but `CurrentYieldPower`, `RunDataStatuscode`, `ConsumptionTotal` and `YieldTotal` do not |
+| Devices found | `hmux0` (outdoor unit, address 08), `ctlv3` (sensoCOMFORT, 15), `vwzio` (VWZ AI indoor unit, 76) |
+| Use | Read-only. No settings are written to the heat pump |
+ 
+Settings in `/etc/default/ebusd`:
+ 
+```
+EBUSD_OPTS="--scanconfig --configpath=/opt/ebusd-config/en -d ens:192.168.8.131:9999 --latency=50 --mqtthost=localhost --mqttport=1883 --mqttjson"
+```
+ 
+
 ## Checks
 
 | Date | Test | Result |
