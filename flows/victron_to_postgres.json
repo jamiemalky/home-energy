@@ -1,0 +1,285 @@
+[
+    {
+        "id": "6ce2ee8629cac1e5",
+        "type": "tab",
+        "label": "Flow 1",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "8014a364e7b4277a",
+        "type": "inject",
+        "z": "6ce2ee8629cac1e5",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "30",
+        "crontab": "",
+        "once": true,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 150,
+        "y": 80,
+        "wires": [
+            [
+                "9a804b3bf5622776"
+            ]
+        ]
+    },
+    {
+        "id": "9a804b3bf5622776",
+        "type": "mqtt out",
+        "z": "6ce2ee8629cac1e5",
+        "name": "",
+        "topic": "R/c0619aba02e2/keepalive",
+        "qos": "",
+        "retain": "",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "d763b8fbd5314ab3",
+        "x": 420,
+        "y": 80,
+        "wires": []
+    },
+    {
+        "id": "625259810a182802",
+        "type": "mqtt in",
+        "z": "6ce2ee8629cac1e5",
+        "name": "",
+        "topic": "N/c0619aba02e2/system/0/#",
+        "qos": "0",
+        "datatype": "json",
+        "broker": "d763b8fbd5314ab3",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 180,
+        "y": 140,
+        "wires": [
+            [
+                "33a29e1401f7846e"
+            ]
+        ]
+    },
+    {
+        "id": "551c1960bfca610f",
+        "type": "debug",
+        "z": "6ce2ee8629cac1e5",
+        "name": "debug 1",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 780,
+        "y": 200,
+        "wires": []
+    },
+    {
+        "id": "33a29e1401f7846e",
+        "type": "function",
+        "z": "6ce2ee8629cac1e5",
+        "name": "Pick readings",
+        "func": "// The readings we want, and a short name for each\nconst wanted = {\n    'Ac/Grid/L1/Power': 'grid_power_w',\n    'Ac/Consumption/L1/Power': 'consumption_power_w',\n    'Dc/Pv/Power': 'pv_power_w',\n    'Dc/Battery/Power': 'battery_power_w',\n    'Dc/Battery/Soc': 'battery_soc_pct'\n};\n\n// Topic looks like N/<id>/system/0/Ac/Grid/L1/Power\n// Cut off the first four parts to get Ac/Grid/L1/Power\nconst path = msg.topic.split('/').slice(4).join('/');\nconst name = wanted[path];\n\n// Ignore anything we don't want, or with no number\nif (!name || typeof msg.payload.value !== 'number') {\n    return null;\n}\n\n// Pass on just the name and the value\nmsg.topic = name;\nmsg.payload = msg.payload.value;\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 440,
+        "y": 140,
+        "wires": [
+            [
+                "c926ae9d0d19008d"
+            ]
+        ]
+    },
+    {
+        "id": "c926ae9d0d19008d",
+        "type": "function",
+        "z": "6ce2ee8629cac1e5",
+        "name": "Remember latest",
+        "func": "// Store each reading with the time it arrived\nconst latest = flow.get('latest') || {};\nlatest[msg.topic] = { value: msg.payload, at: Date.now() };\nflow.set('latest', latest);\nreturn null;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 670,
+        "y": 140,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "3f104a450322bab6",
+        "type": "inject",
+        "z": "6ce2ee8629cac1e5",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "30",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 150,
+        "y": 200,
+        "wires": [
+            [
+                "16f212b6c9e8bffd"
+            ]
+        ]
+    },
+    {
+        "id": "16f212b6c9e8bffd",
+        "type": "function",
+        "z": "6ce2ee8629cac1e5",
+        "name": "Build insert",
+        "func": "// Write every reading heard from in the last 10 minutes\nconst latest = flow.get('latest') || {};\nconst cutoff = Date.now() - 10 * 60 * 1000;\nconst names = Object.keys(latest).filter(n => latest[n].at >= cutoff);\nif (names.length === 0) return null;\n\nmsg.params = [names, names.map(n => latest[n].value)];\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 350,
+        "y": 200,
+        "wires": [
+            [
+                "1c12314bdc55bdea"
+            ]
+        ]
+    },
+    {
+        "id": "1c12314bdc55bdea",
+        "type": "postgresql",
+        "z": "6ce2ee8629cac1e5",
+        "name": "",
+        "query": "INSERT INTO readings (ts, source, metric, value)\nSELECT now(), 'victron', unnest($1::text[]), unnest($2::double precision[]);",
+        "postgreSQLConfig": "7cc36c3f3eb2203d",
+        "split": false,
+        "rowsPerMsg": 1,
+        "outputs": 1,
+        "x": 570,
+        "y": 200,
+        "wires": [
+            [
+                "551c1960bfca610f"
+            ]
+        ]
+    },
+    {
+        "id": "d763b8fbd5314ab3",
+        "type": "mqtt-broker",
+        "name": "Victron GX",
+        "broker": "192.168.8.187",
+        "port": "8883",
+        "tls": "d9d21de1a776c84c",
+        "clientid": "",
+        "autoConnect": true,
+        "usetls": true,
+        "protocolVersion": 4,
+        "keepalive": 60,
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthRetain": "false",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closeRetain": "false",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willRetain": "false",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    },
+    {
+        "id": "7cc36c3f3eb2203d",
+        "type": "postgreSQLConfig",
+        "name": "",
+        "host": "127.0.0.1",
+        "hostFieldType": "str",
+        "port": 5432,
+        "portFieldType": "num",
+        "database": "energy",
+        "databaseFieldType": "str",
+        "ssl": "false",
+        "sslFieldType": "bool",
+        "applicationName": "",
+        "applicationNameType": "str",
+        "max": 10,
+        "maxFieldType": "num",
+        "idle": 1000,
+        "idleFieldType": "num",
+        "connectionTimeout": 10000,
+        "connectionTimeoutFieldType": "num",
+        "userFieldType": "cred",
+        "userEnv": "",
+        "passwordFieldType": "cred",
+        "passwordEnv": ""
+    },
+    {
+        "id": "d9d21de1a776c84c",
+        "type": "tls-config",
+        "name": "",
+        "certType": "files",
+        "cert": "",
+        "key": "",
+        "p12": "",
+        "p12name": "",
+        "ca": "",
+        "certname": "",
+        "keyname": "",
+        "caname": "",
+        "servername": "",
+        "verifyservercert": false,
+        "alpnprotocol": "",
+        "certEnv": "",
+        "keyEnv": "",
+        "caEnv": ""
+    },
+    {
+        "id": "0ebaf58a7dc95bdc",
+        "type": "global-config",
+        "env": [],
+        "modules": {
+            "node-red-contrib-postgresql": "0.16.2"
+        }
+    }
+]
