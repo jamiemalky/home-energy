@@ -2,7 +2,7 @@
     {
         "id": "6ce2ee8629cac1e5",
         "type": "tab",
-        "label": "Flow 1",
+        "label": "victron_to_postgres",
         "disabled": false,
         "info": "",
         "env": []
@@ -11,7 +11,7 @@
         "id": "8014a364e7b4277a",
         "type": "inject",
         "z": "6ce2ee8629cac1e5",
-        "name": "",
+        "name": "Inject 30s",
         "props": [
             {
                 "p": "payload"
@@ -79,8 +79,8 @@
         "id": "551c1960bfca610f",
         "type": "debug",
         "z": "6ce2ee8629cac1e5",
-        "name": "debug 1",
-        "active": true,
+        "name": "Victron insert result",
+        "active": false,
         "tosidebar": true,
         "console": false,
         "tostatus": false,
@@ -88,8 +88,8 @@
         "targetType": "msg",
         "statusVal": "",
         "statusType": "auto",
-        "x": 780,
-        "y": 200,
+        "x": 810,
+        "y": 440,
         "wires": []
     },
     {
@@ -97,7 +97,7 @@
         "type": "function",
         "z": "6ce2ee8629cac1e5",
         "name": "Pick readings",
-        "func": "// The readings we want, and a short name for each\nconst wanted = {\n    'Ac/Grid/L1/Power': 'grid_power_w',\n    'Ac/Consumption/L1/Power': 'consumption_power_w',\n    'Dc/Pv/Power': 'pv_power_w',\n    'Dc/Battery/Power': 'battery_power_w',\n    'Dc/Battery/Soc': 'battery_soc_pct'\n};\n\n// Topic looks like N/<id>/system/0/Ac/Grid/L1/Power\n// Cut off the first four parts to get Ac/Grid/L1/Power\nconst path = msg.topic.split('/').slice(4).join('/');\nconst name = wanted[path];\n\n// Ignore anything we don't want, or with no number\nif (!name || typeof msg.payload.value !== 'number') {\n    return null;\n}\n\n// Pass on just the name and the value\nmsg.topic = name;\nmsg.payload = msg.payload.value;\nreturn msg;",
+        "func": "const wanted = {\n  // system summary\n  'system/0/Ac/Grid/L1/Power': 'grid_power_w',\n  'system/0/Ac/Consumption/L1/Power': 'consumption_power_w',\n  'system/0/Ac/ConsumptionOnInput/L1/Power': 'consumption_on_input_w',\n  'system/0/Ac/ConsumptionOnOutput/L1/Power': 'consumption_on_output_w',\n  'system/0/Dc/Pv/Power': 'pv_power_w',\n  'system/0/Dc/Battery/Power': 'battery_power_w',\n  'system/0/Dc/Battery/Soc': 'battery_soc_pct',\n  'system/0/Dc/Battery/Voltage': 'battery_voltage_v',\n  'system/0/Dc/Battery/Current': 'battery_current_a',\n  'system/0/Dc/Battery/Temperature': 'battery_temp_c',\n  'system/0/Dc/Battery/TimeToGo': 'battery_time_to_go_s',\n  'system/0/Ac/ActiveIn/Source': 'active_in_source',\n  'system/0/SystemState/State': 'system_state',\n  'system/0/SystemState/LowSoc': 'flag_low_soc',\n  'system/0/SystemState/SlowCharge': 'flag_slow_charge',\n  'system/0/SystemState/ChargeDisabled': 'flag_charge_disabled',\n  'system/0/SystemState/DischargeDisabled': 'flag_discharge_disabled',\n  'system/0/SystemState/BatteryLife': 'flag_batterylife',\n  'system/0/Control/ScheduledCharge': 'scheduled_charge_active',\n\n  // grid meter (EM112)\n  'grid/30/Ac/Energy/Forward': 'grid_import_kwh',\n  'grid/30/Ac/Energy/Reverse': 'grid_export_kwh',\n  'grid/30/Ac/L1/Voltage': 'grid_voltage_v',\n  'grid/30/Ac/L1/Current': 'grid_current_a',\n  'grid/30/Ac/L1/PowerFactor': 'grid_power_factor',\n  'grid/30/Ac/Frequency': 'grid_frequency_hz',\n\n  // inverter/charger (EasySolar)\n  'vebus/275/State': 'vebus_state',\n  'vebus/275/Ac/ActiveIn/L1/P': 'vebus_ac_in_power_w',\n  'vebus/275/Ac/Out/L1/P': 'vebus_ac_out_power_w',\n  'vebus/275/Dc/0/Power': 'vebus_dc_power_w',\n  'vebus/275/Dc/0/Temperature': 'vebus_temp_c',\n  'vebus/275/Alarms/L1/Overload': 'vebus_alarm_overload',\n  'vebus/275/Alarms/L1/HighTemperature': 'vebus_alarm_high_temp',\n\n  // battery BMS\n  'battery/512/Soc': 'bms_soc_pct',\n  'battery/512/Soh': 'bms_soh_pct',\n  'battery/512/Info/MaxChargeCurrent': 'bms_ccl_a',\n  'battery/512/Info/MaxDischargeCurrent': 'bms_dcl_a',\n  'battery/512/Info/MaxChargeVoltage': 'bms_cvl_v',\n  'battery/512/System/MinCellVoltage': 'bms_cell_v_min',\n  'battery/512/System/MaxCellVoltage': 'bms_cell_v_max',\n  'battery/512/System/MinCellTemperature': 'bms_cell_temp_min',\n  'battery/512/System/MaxCellTemperature': 'bms_cell_temp_max',\n  'battery/512/System/NrOfModulesOnline': 'bms_modules_online',\n  'battery/512/System/NrOfModulesBlockingCharge': 'bms_modules_blocking_charge',\n  'battery/512/System/NrOfModulesBlockingDischarge': 'bms_modules_blocking_discharge',\n  'battery/512/Alarms/CellImbalance': 'bms_alarm_cell_imbalance',\n  'battery/512/Alarms/LowChargeTemperature': 'bms_alarm_low_charge_temp',\n  'battery/512/Alarms/ChargeBlocked': 'bms_alarm_charge_blocked',\n  'battery/512/Alarms/DischargeBlocked': 'bms_alarm_discharge_blocked',\n  'battery/512/Alarms/InternalFailure': 'bms_alarm_internal_failure',\n\n  // solar charger (MPPT)\n  'solarcharger/273/Pv/V': 'pv_voltage_v',\n  'solarcharger/273/Yield/Power': 'mppt_power_w',\n  'solarcharger/273/Yield/System': 'pv_yield_total_kwh',\n  'solarcharger/273/History/Daily/0/Yield': 'pv_yield_today_kwh',\n  'solarcharger/273/MppOperationMode': 'mppt_mode',\n  'solarcharger/273/State': 'mppt_state',\n  'solarcharger/273/ErrorCode': 'mppt_error'\n};\nconst path = msg.topic.split('/').slice(2).join('/');\nconst name = wanted[path];\nif (!name || typeof msg.payload.value !== 'number') return null;\nmsg.topic = name;\nmsg.payload = msg.payload.value;\nreturn msg;",
         "outputs": 1,
         "timeout": 0,
         "noerr": 0,
@@ -134,7 +134,7 @@
         "id": "3f104a450322bab6",
         "type": "inject",
         "z": "6ce2ee8629cac1e5",
-        "name": "",
+        "name": "Inject 30s",
         "props": [
             {
                 "p": "payload"
@@ -152,7 +152,7 @@
         "payload": "",
         "payloadType": "date",
         "x": 150,
-        "y": 200,
+        "y": 440,
         "wires": [
             [
                 "16f212b6c9e8bffd"
@@ -172,7 +172,7 @@
         "finalize": "",
         "libs": [],
         "x": 350,
-        "y": 200,
+        "y": 440,
         "wires": [
             [
                 "1c12314bdc55bdea"
@@ -190,10 +190,94 @@
         "rowsPerMsg": 1,
         "outputs": 1,
         "x": 570,
-        "y": 200,
+        "y": 440,
         "wires": [
             [
                 "551c1960bfca610f"
+            ]
+        ]
+    },
+    {
+        "id": "c83a4aac8c10a9aa",
+        "type": "mqtt in",
+        "z": "6ce2ee8629cac1e5",
+        "name": "",
+        "topic": "N/c0619aba02e2/grid/30/#",
+        "qos": "0",
+        "datatype": "json",
+        "broker": "d763b8fbd5314ab3",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 170,
+        "y": 200,
+        "wires": [
+            [
+                "33a29e1401f7846e"
+            ]
+        ]
+    },
+    {
+        "id": "c83fa1f81739ee69",
+        "type": "mqtt in",
+        "z": "6ce2ee8629cac1e5",
+        "name": "",
+        "topic": "N/c0619aba02e2/vebus/275/#",
+        "qos": "0",
+        "datatype": "json",
+        "broker": "d763b8fbd5314ab3",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 180,
+        "y": 260,
+        "wires": [
+            [
+                "33a29e1401f7846e"
+            ]
+        ]
+    },
+    {
+        "id": "6ea58ec695779c54",
+        "type": "mqtt in",
+        "z": "6ce2ee8629cac1e5",
+        "name": "",
+        "topic": "N/c0619aba02e2/battery/512/#",
+        "qos": "0",
+        "datatype": "json",
+        "broker": "d763b8fbd5314ab3",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 190,
+        "y": 320,
+        "wires": [
+            [
+                "33a29e1401f7846e"
+            ]
+        ]
+    },
+    {
+        "id": "23401a3847111651",
+        "type": "mqtt in",
+        "z": "6ce2ee8629cac1e5",
+        "name": "",
+        "topic": "N/c0619aba02e2/solarcharger/273/#",
+        "qos": "0",
+        "datatype": "json",
+        "broker": "d763b8fbd5314ab3",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 200,
+        "y": 380,
+        "wires": [
+            [
+                "33a29e1401f7846e"
             ]
         ]
     },
@@ -275,7 +359,7 @@
         "caEnv": ""
     },
     {
-        "id": "0ebaf58a7dc95bdc",
+        "id": "43300e2a407ba54e",
         "type": "global-config",
         "env": [],
         "modules": {
