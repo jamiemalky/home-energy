@@ -8,6 +8,7 @@ Newest first. Dates marked *to confirm* need checking against the source.
 | --- | --- | --- |
 | 2026-11-24 | System filter fitted on the heat pump primary circuit (planned) | Compare flow rate before and after |
 | 2026-11-24 | Victron Dynamic ESS turned off; ESS scheduled charging to 100% in the Cosy cheap windows (04:00–07:00, 13:00–16:00, 22:00–00:00) | Start of the scheduled-charging period. DESS period ends |
+| 2026-11-23 | Hot water target lowered from 50 °C to 45 °C | Hot water energy, cycle frequency and COP change from here |
 | 2026-11-23 | DESS fortnightly battery balancing day (battery held high, grid used instead) | Exclude from analysis of DESS's everyday decisions |
 | 2026-11-22 | Node-RED logging Victron readings to PostgreSQL every 30 s (from about 21:50) | Start of high-resolution database data |
 | 2026-11-22 | Flow rate found to depend on open zones; one underfloor zone kept permanently open from this evening | Heat pump flow and possibly COP change from here |
