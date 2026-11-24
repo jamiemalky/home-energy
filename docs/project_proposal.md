@@ -1,6 +1,6 @@
 # Home Energy Data Project — Proposal
 
-Last updated Nov 15, 2026
+Last updated 24 November 2026
 
 ## Summary
 
@@ -29,7 +29,32 @@ This project logs a home's solar, battery, heat pump and room-temperature data i
 
 The project builds on equipment already installed: a Victron EasySolar inverter-charger with a GX device, 20 kWh of LiFePO4 batteries and 9 kW of solar; an EM112 grid meter; a Vaillant aroTHERM air-source heat pump with a sensoCOMFORT controller; underfloor heating and radiators with Heatmiser neo room thermostats; and Octopus time-of-use import and export tariffs, chosen by season (Cosy import for winter 2026–27).
 
-&#91;embedded content: system architecture · 4 sources, the home server, 4 outputs\]
+```mermaid
+flowchart LR
+    subgraph Sources
+        V[Victron GX<br/>solar, battery, grid]
+        E[eBUS adapter<br/>heat pump]
+        N[Heatmiser neoHub<br/>room temperatures]
+        A[Online APIs<br/>prices, weather, forecasts, Axle]
+    end
+    subgraph Server[Home server - Proxmox]
+        M[Mosquitto<br/>MQTT broker] --> R[Node-RED<br/>collect, store, control]
+        R --> P[(PostgreSQL)]
+        P --> G[Python and Grafana<br/>analysis and optimiser]
+    end
+    subgraph Outputs
+        D[Grafana dashboards]
+        H[Smart display<br/>switches and alerts]
+        B[Nightly backups]
+    end
+    V <--> M
+    E --> M
+    N --> R
+    A --> R
+    G --> D
+    R <--> H
+    P --> B
+```
 
 The Victron and smart-display links run both ways, because later stages send control commands back out; everything else is read-only.
 
@@ -74,11 +99,11 @@ Everything is free and open source. Proxmox keeps each service separate, so any 
 | node-red-contrib-google-smarthome, with a Cloudflare or Tailscale tunnel | Data stack | Exposes virtual switches such as Charge EV now to the smart display, without opening router ports |
 | Home Assistant OS (optional) | Proxmox VM | Future integrations, sharing the same MQTT broker |
 | Git and GitHub | Everywhere | This repository: flows, schema, analysis code and dashboard definitions |
-| pg\_dump and restic | Data stack | Nightly backups to the external drive and an off-site cloud bucket |
+| pg_dump and restic | Data stack | Nightly backups to the external drive and an off-site cloud bucket |
 
 ## Measurables
 
-Success is judged on data quality first, then on what the data reveals, and last on money saved or earned against Victron Dynamic ESS.
+Success is judged on data quality first, then on what the data reveals, and last on money saved or earned against the best current battery strategy.
 
 | Area | Measure | Target |
 | --- | --- | --- |
@@ -93,7 +118,7 @@ Success is judged on data quality first, then on what the data reveals, and last
 | House model | Heat-loss coefficient in W/K, with an uncertainty range | Compared with the design heat-loss calculation |
 | Forecasting | Solar and load forecast error, as mean absolute error in kWh per day | Each forecast source compared on the same days |
 | VPP | Events joined, energy delivered and income earned; every event ends with the system back in its normal state | All events handled safely; income reported monthly |
-| Optimiser | Cost per day against Victron Dynamic ESS, in shadow mode | At least 4 weeks at parity or better before it takes control |
+| Optimiser | Share of the best possible saving achieved, against the best current strategy (scheduled charging in winter, Victron Dynamic ESS in summer), in shadow mode | At least 4 weeks at parity or better before it takes control |
 
 ## Stages
 
@@ -108,8 +133,8 @@ Eleven stages, each ending in something that works and is committed to Git. Stag
 
 ### 2. Feasibility backtest and tariff comparison on existing data (solar and battery only)
 
-- **Goal:** early, evidence-based answers to two questions, using data that already exists and before any new hardware arrives: could a custom battery schedule beat Victron Dynamic ESS, and which Octopus import and export tariffs suit the house best, season by season?
-- **Requires:** historical solar, consumption, grid and battery data exported from VRM (CSV download or the VRM API), and historical unit rates and standing charges for the candidate tariffs from Octopus's public API for the local region: Agile, Cosy, Go, Flux and Tracker on import, and Agile Outgoing and fixed export on the export side. A Python model of the battery (usable capacity, charge and discharge power limits, round-trip efficiency, the 15% state-of-charge floor and the export limit), solved as the same half-hourly linear programme planned for stage 11, using PuLP, and re-run under each tariff, because the best battery schedule changes with the tariff. Heat pump, EV and hot water use are treated as fixed demand, because they can't be shifted in hindsight. Only import and export pairings that Octopus actually allows are compared.
+- **Goal:** early, evidence-based answers to two questions, using data that already exists and before any new hardware arrives: could a custom battery schedule beat Victron Dynamic ESS and a simple rule that charges to 100% in every cheap slot, and which Octopus import and export tariffs suit the house best, season by season?
+- **Requires:** historical solar, consumption, grid and battery data exported from VRM (CSV download or the VRM API), and historical unit rates and standing charges for the candidate tariffs from Octopus's public API for the local region: Agile, Cosy, Go, Flux and Tracker on import, and Agile Outgoing and fixed export on the export side. A Python model of the battery (usable capacity, charge and discharge power limits, round-trip efficiency, the 15% state-of-charge floor and the export limit), solved as the same half-hourly linear programme planned for stage 11, using PuLP, and re-run under each tariff, because the best battery schedule changes with the tariff. Heat pump, EV and hot water use are treated as fixed demand, because they can't be shifted in hindsight. Only import and export pairings that Octopus actually allows are compared. Because periods differ in weather and demand, each strategy (actual, cheap-slot rule, optimised) is scored as the share of the best possible saving it achieved.
 - **Done when:** a notebook and a short write-up in `docs/` report, over at least a month of data: actual cost; optimised cost on the current tariff and the gap between them; and the annualised cost of each allowed tariff pairing, standing charges included. The write-up states plainly that optimised figures assume perfect foresight and are therefore an upper bound, recommends a tariff for winter and for summer, and concludes whether the stage 11 optimiser is worth building. The comparison is re-run as each new season of data arrives.
 
 ### 3. Home server foundations
@@ -157,14 +182,14 @@ Eleven stages, each ending in something that works and is committed to Git. Stag
 ### 10. Axle VPP participation
 
 - **Goal:** the battery taking part in Axle Energy grid-support events automatically and safely.
-- **Requires:** a Node-RED flow on the GX that receives events from the Axle API, pauses Victron Dynamic ESS for the event window, sets the ESS grid setpoint to export at the agreed power, and restores normal operation afterwards. Safety features come first: a state-of-charge floor, an absolute end-time timer independent of the event logic, and a restore-to-safe-state on Node-RED startup. Every event is logged to the database.
+- **Requires:** a Node-RED flow on the GX that receives events from the Axle API, pauses the active battery strategy (scheduled charging or Victron Dynamic ESS) for the event window, sets the ESS grid setpoint to export at the agreed power, and restores normal operation afterwards. Safety features come first: a state-of-charge floor, an absolute end-time timer independent of the event logic, and a restore-to-safe-state on Node-RED startup. Every event is logged to the database.
 - **Done when:** a test event and then several real events run end to end, the system returns to its normal state every time, and delivered energy and income are reported.
 
 ### 11. Forecasting and optimiser
 
-- **Goal:** a scheduler for the battery, EV, heating and hot water that beats Victron Dynamic ESS.
-- **Requires:** a load model trained on the logged data, solar and weather forecasts, and a linear programme over 48 half-hour slots, solved with PuLP or scipy and re-run every half hour. It runs in shadow mode first and is backtested against Victron Dynamic ESS. VPP event windows are treated as fixed commitments.
-- **Done when:** four weeks in shadow mode show parity or better. Only then does it take control, with Victron Dynamic ESS kept as the fallback.
+- **Goal:** a scheduler for the battery, EV, heating and hot water that beats the best current strategy: scheduled charging in winter, Victron Dynamic ESS in summer.
+- **Requires:** a load model trained on the logged data, solar and weather forecasts, a tariff module that reads the current Octopus tariff from the account API and turns it into half-hourly import and export prices (so the same optimiser works on Cosy, Agile or any other tariff, and the stage 2 tariff comparison reuses it), and a linear programme over 48 half-hour slots, solved with PuLP or scipy and re-run every half hour. It runs in shadow mode first and is backtested against the best current strategy. VPP event windows are treated as fixed commitments.
+- **Done when:** four weeks in shadow mode show parity or better. Only then does it take control, with the previous strategy kept as the fallback.
 
 ## Risks and safeguards
 
@@ -175,8 +200,8 @@ The main risks come from the control stages, so safety logic is built before any
 | Overloading the incoming supply: heat pump, EV and immersion are all on the grid side of the inverter | Load shedding on the grid-meter reading with a ceiling of about 65–70 A; every override still passes through it |
 | An override, schedule or VPP event left running | Every override expires on its own; an absolute end-time timer sits outside the event logic |
 | Battery run too low, including during a VPP event | A state-of-charge floor of 15%, matching the minimum set in Victron Dynamic ESS, that no schedule or event can breach |
-| Node-RED restarts mid-action | Restore a safe state on startup, with Victron Dynamic ESS as the fallback |
-| Victron Dynamic ESS and a VPP event fighting each other | Dynamic ESS is paused for the event window and re-enabled automatically when it ends |
+| Node-RED restarts mid-action | Restore a safe state on startup, with ESS scheduled charging as the fallback |
+| The battery strategy and a VPP event fighting each other | The active strategy is paused for the event window and restored automatically when it ends |
 | Writing to the eBUS upsets the heat pump | ebusd stays read-only until logging is proven |
 | Losing the grid meter after a firmware update | Back up the meter services first, keep dependencies in `/data`, and note the firmware version for rollback |
 | Server hardware failure | Proxmox snapshots, tested off-box backups, and a rebuild path documented in this repository |
