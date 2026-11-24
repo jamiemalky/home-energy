@@ -1,0 +1,284 @@
+[
+    {
+        "id": "8135727f8eebeb2d",
+        "type": "tab",
+        "label": "heat_pump_to_postgres",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "f94916ed4202567e",
+        "type": "mqtt in",
+        "z": "8135727f8eebeb2d",
+        "name": "",
+        "topic": "ebusd/#",
+        "qos": "0",
+        "datatype": "json",
+        "broker": "09dd292b62808b81",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 110,
+        "y": 60,
+        "wires": [
+            [
+                "10c11bab3aadab7f"
+            ]
+        ]
+    },
+    {
+        "id": "0bf672d3e6d4276a",
+        "type": "debug",
+        "z": "8135727f8eebeb2d",
+        "name": "Heat pump readings",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 780,
+        "y": 60,
+        "wires": []
+    },
+    {
+        "id": "b6982f2c2d03bd0a",
+        "type": "inject",
+        "z": "8135727f8eebeb2d",
+        "name": "Inject 30s",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "30",
+        "crontab": "",
+        "once": true,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 150,
+        "y": 120,
+        "wires": [
+            [
+                "231c844ca93ea511"
+            ]
+        ]
+    },
+    {
+        "id": "231c844ca93ea511",
+        "type": "function",
+        "z": "8135727f8eebeb2d",
+        "name": "Request readings",
+        "func": "// [device, value] pairs to read every 30 seconds\nconst wanted = [\n    // Outdoor unit (hmux0)\n    ['hmux0', 'RunDataElectricPowerConsumption'], // electricity in (W)\n    ['hmux0', 'BuildingCircuitFlow'],             // water flow (l/h)\n    ['hmux0', 'RunDataFlowTemp'],                 // water out (°C)\n    ['hmux0', 'RunDataReturnTemp'],               // water back (°C)\n    ['hmux0', 'RunDataAirInletTemp'],             // outdoor air in (°C)\n    ['hmux0', 'RunDataCompressorSpeed'],\n    ['hmux0', 'CurrentCompressorUtil'],           // compressor output (%)\n    ['hmux0', 'RunDataHighPressure'],             // refrigerant pressure (bar)\n    ['hmux0', 'RunDataBuildingCPumpPower'],       // pump speed (%)\n    ['hmux0', 'RunStats4PortValveSwitches'],      // defrost counter\n    ['hmux0', 'CompressorStarts'],\n        ['hmux0', 'Currenterror'],                    // fault codes, e.g. 283\n    ['hmux0', 'YieldHcDay'],                      // heat to house today (kWh)\n    ['hmux0', 'YieldHwcDay'],                     // heat to hot water today (kWh)\n    ['hmux0', 'CopHcMonth'],\n    // Controller (ctlv3)\n    ['ctlv3', 'Hc1ActualFlowTempDesired'],        // target flow (°C)\n    ['ctlv3', 'Hc1Status'],                       // heating active (1/0)\n    ['ctlv3', 'Hc1PumpStatus'],\n    ['ctlv3', 'Z1ValveStatus'],\n    ['ctlv3', 'HwcStorageTemp'],                  // cylinder (°C)\n    ['ctlv3', 'HwcTempDesired'],\n    ['ctlv3', 'OutsideTempAvg'],\n    ['ctlv3', 'PrEnergySumHc'],                   // electricity for heating, total (kWh)\n    ['ctlv3', 'PrEnergySumHwc']                   // electricity for hot water, total (kWh)\n];\n\nflow.set('ebusd_wanted', wanted.map(([dev, name]) => `${dev}/${name}`));\n\nreturn [wanted.map(([dev, name]) => ({ topic: `ebusd/${dev}/${name}/get`, payload: '' }))];",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 370,
+        "y": 120,
+        "wires": [
+            [
+                "8733a09038afa0b9"
+            ]
+        ]
+    },
+    {
+        "id": "10c11bab3aadab7f",
+        "type": "function",
+        "z": "8135727f8eebeb2d",
+        "name": "Parse ebusd",
+        "func": "// Topic looks like ebusd/<device>/<name>\nconst parts = msg.topic.split('/');\nif (parts.length !== 3) return null;\nconst device = parts[1];\nconst name = parts[2];\n\n// Only keep readings we asked for\nconst wanted = flow.get('ebusd_wanted') || [];\nif (!wanted.includes(`${device}/${name}`)) return null;\n\nconst p = msg.payload;\nif (!p || typeof p !== 'object') return null;\n\nlet value;\nif (name === 'Currenterror') {\n    // Up to five codes; '-' means none. Keep the first real code, or 0.\n    const codes = Object.values(p)\n        .map(f => f && f.value)\n        .filter(v => typeof v === 'number' && v > 0);\n    value = codes.length ? codes[0] : 0;\n} else {\n    // The number is the 'value' inside the first field\n    const first = Object.values(p)[0];\n    value = first && first.value;\n}\nif (typeof value !== 'number') return null;\n\nmsg.topic = `${device}_${name}`;   // e.g. hmux0_BuildingCircuitFlow\nmsg.payload = value;\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 290,
+        "y": 60,
+        "wires": [
+            [
+                "ae2247a0dbbc06ad"
+            ]
+        ]
+    },
+    {
+        "id": "8733a09038afa0b9",
+        "type": "mqtt out",
+        "z": "8135727f8eebeb2d",
+        "name": "",
+        "topic": "",
+        "qos": "",
+        "retain": "",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "09dd292b62808b81",
+        "x": 610,
+        "y": 120,
+        "wires": []
+    },
+    {
+        "id": "ae2247a0dbbc06ad",
+        "type": "function",
+        "z": "8135727f8eebeb2d",
+        "name": "Remember latest",
+        "func": "// Store each reading with the time it arrived\nconst latest = flow.get('latest') || {};\nlatest[msg.topic] = { value: msg.payload, at: Date.now() };\nflow.set('latest', latest);\nreturn null;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 510,
+        "y": 60,
+        "wires": [
+            [
+                "0bf672d3e6d4276a"
+            ]
+        ]
+    },
+    {
+        "id": "2d4575de1fb26968",
+        "type": "inject",
+        "z": "8135727f8eebeb2d",
+        "name": "Inject 30s",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "30",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 150,
+        "y": 180,
+        "wires": [
+            [
+                "550090ab9192b2ba"
+            ]
+        ]
+    },
+    {
+        "id": "550090ab9192b2ba",
+        "type": "function",
+        "z": "8135727f8eebeb2d",
+        "name": "Build insert",
+        "func": "// Write every reading heard from in the last 10 minutes\nconst latest = flow.get('latest') || {};\nconst cutoff = Date.now() - 10 * 60 * 1000;\nconst names = Object.keys(latest).filter(n => latest[n].at >= cutoff);\nif (names.length === 0) return null;\n\nmsg.params = [names, names.map(n => latest[n].value)];\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 350,
+        "y": 180,
+        "wires": [
+            [
+                "83a7eaf93b73d9eb"
+            ]
+        ]
+    },
+    {
+        "id": "83a7eaf93b73d9eb",
+        "type": "postgresql",
+        "z": "8135727f8eebeb2d",
+        "name": "",
+        "query": "INSERT INTO readings (ts, source, metric, value)\nSELECT now(), 'ebusd', unnest($1::text[]), unnest($2::double precision[]);",
+        "postgreSQLConfig": "7cc36c3f3eb2203d",
+        "split": false,
+        "rowsPerMsg": 1,
+        "outputs": 1,
+        "x": 570,
+        "y": 180,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "09dd292b62808b81",
+        "type": "mqtt-broker",
+        "name": "Local broker",
+        "broker": "127.0.0.1",
+        "port": 1883,
+        "clientid": "",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": 4,
+        "keepalive": 60,
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthRetain": "false",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closeRetain": "false",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willRetain": "false",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    },
+    {
+        "id": "7cc36c3f3eb2203d",
+        "type": "postgreSQLConfig",
+        "name": "",
+        "host": "127.0.0.1",
+        "hostFieldType": "str",
+        "port": 5432,
+        "portFieldType": "num",
+        "database": "energy",
+        "databaseFieldType": "str",
+        "ssl": "false",
+        "sslFieldType": "bool",
+        "applicationName": "",
+        "applicationNameType": "str",
+        "max": 10,
+        "maxFieldType": "num",
+        "idle": 1000,
+        "idleFieldType": "num",
+        "connectionTimeout": 10000,
+        "connectionTimeoutFieldType": "num",
+        "userFieldType": "cred",
+        "userEnv": "",
+        "passwordFieldType": "cred",
+        "passwordEnv": ""
+    },
+    {
+        "id": "95101b22941d1ed6",
+        "type": "global-config",
+        "env": [],
+        "modules": {
+            "node-red-contrib-postgresql": "0.16.2"
+        }
+    }
+]
