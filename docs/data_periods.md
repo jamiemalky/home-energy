@@ -6,6 +6,9 @@ Newest first. Dates marked *to confirm* need checking against the source.
 
 | Date | Event | Effect on analysis |
 | --- | --- | --- |
+| 2026-11-24 | Victron logging extended from 5 to about 55 readings (from about 10:45) | Grid meter counters, BMS and system state available from here |
+| 2026-11-24 | Heat pump readings logged to PostgreSQL every 30 s (from about 10:16) | Start of high-resolution heat pump data |
+| 2026-11-23 | Hot water target lowered from 50 °C to 45 °C | Hot water energy, cycle frequency and COP change from here |
 | 2026-11-24 | System filter fitted on the heat pump primary circuit (planned) | Compare flow rate before and after |
 | 2026-11-24 | Victron Dynamic ESS turned off; ESS scheduled charging to 100% in the Cosy cheap windows (04:00–07:00, 13:00–16:00, 22:00–00:00) | Start of the scheduled-charging period. DESS period ends |
 | 2026-11-23 | Hot water target lowered from 50 °C to 45 °C | Hot water energy, cycle frequency and COP change from here |
